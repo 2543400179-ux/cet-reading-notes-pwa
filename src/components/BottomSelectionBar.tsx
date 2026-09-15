@@ -215,10 +215,18 @@ export const BottomSelectionBar: React.FC<BottomSelectionBarProps> = ({
 
         {/* Row 2: Pure horizontal line with: 「高亮」标签 + 6个正方形颜色块 + 删除按钮 + 关闭按钮 */}
         <div className="flex items-center justify-between gap-1.5 sm:gap-2 flex-nowrap whitespace-nowrap overflow-x-auto scrollbar-none pt-1.5 border-t border-slate-700/60">
-          {/* 1. 「高亮」或「字色」标签 (横排文字) */}
-          <span className="text-xs font-bold text-slate-200 shrink-0 select-none whitespace-nowrap px-1">
-            {activeColorMode === 'bg' ? '高亮' : '字色'}
-          </span>
+          {/* 1. 「高亮」或「字色」标签 (横排文字，点击可快捷切换) */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setActiveColorMode((m) => (m === 'bg' ? 'text' : 'bg'))}
+            className="text-xs font-bold shrink-0 select-none whitespace-nowrap px-1.5 py-0.5 rounded-md bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-white/10 transition cursor-pointer flex items-center gap-1"
+            title="点击切换高亮与字色模式"
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            <span style={{ whiteSpace: 'nowrap' }}>{activeColorMode === 'bg' ? '高亮' : '字色'}</span>
+            <span className="text-[10px] text-slate-400">⇄</span>
+          </button>
 
           {/* 2. 6个小正方形颜色块 (大小统一的小正方形) */}
           <div className="flex items-center gap-1.5 shrink-0">
@@ -243,7 +251,7 @@ export const BottomSelectionBar: React.FC<BottomSelectionBarProps> = ({
                 title={`应用${activeColorMode === 'bg' ? '背景高亮' : '文字颜色'}：${item.label}`}
               >
                 {activeColorMode === 'text' && (
-                  <span className="font-bold text-[11px]" style={{ color: item.hex }}>
+                  <span className="font-bold text-[11px]" style={{ color: item.hex, whiteSpace: 'nowrap' }}>
                     A
                   </span>
                 )}
@@ -251,7 +259,7 @@ export const BottomSelectionBar: React.FC<BottomSelectionBarProps> = ({
             ))}
           </div>
 
-          {/* 3. 删除按钮 (横排显示) */}
+          {/* 3. 删除按钮 (横排显示，不折行) */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
@@ -260,14 +268,15 @@ export const BottomSelectionBar: React.FC<BottomSelectionBarProps> = ({
               e.stopPropagation();
               onDeleteHighlight(selectionInfo.startPos, selectionInfo.endPos);
             }}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-rose-300 hover:text-rose-100 hover:bg-rose-500/20 active:scale-95 transition cursor-pointer shrink-0 font-sans whitespace-nowrap"
+            className="flex flex-row items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-rose-300 hover:text-rose-100 hover:bg-rose-500/20 active:scale-95 transition cursor-pointer shrink-0 whitespace-nowrap"
+            style={{ whiteSpace: 'nowrap' }}
             title="删除所选区域的高亮与颜色"
           >
             <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-300" />
-            <span className="whitespace-nowrap">删除</span>
+            <span style={{ whiteSpace: 'nowrap' }}>删除</span>
           </button>
 
-          {/* 4. 关闭按钮 (横排显示) */}
+          {/* 4. 关闭按钮 (横排显示，不折行) */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
@@ -276,11 +285,12 @@ export const BottomSelectionBar: React.FC<BottomSelectionBarProps> = ({
               e.stopPropagation();
               onClose();
             }}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/60 active:scale-95 transition cursor-pointer shrink-0 font-sans whitespace-nowrap"
+            className="flex flex-row items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/60 active:scale-95 transition cursor-pointer shrink-0 whitespace-nowrap"
+            style={{ whiteSpace: 'nowrap' }}
             title="关闭操作条"
           >
             <X className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-            <span className="whitespace-nowrap">关闭</span>
+            <span style={{ whiteSpace: 'nowrap' }}>关闭</span>
           </button>
 
           {/* 调色板扩展 */}

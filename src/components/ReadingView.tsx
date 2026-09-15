@@ -316,8 +316,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     });
 
     setHighlights(newHighlights);
-    setSelectionInfo(null);
-    window.getSelection()?.removeAllRanges();
+    // Keep selectionInfo so user can chain background color + text color without re-selecting
   };
 
   // Delete Highlight in selected range
@@ -342,8 +341,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     });
 
     setHighlights(newHighlights);
-    setSelectionInfo(null);
-    window.getSelection()?.removeAllRanges();
+    // Keep selectionInfo after delete so user can re-apply if desired
   };
 
   // Floating Sheet Drag Handlers

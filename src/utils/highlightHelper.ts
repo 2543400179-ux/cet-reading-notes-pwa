@@ -36,10 +36,15 @@ export function applyHighlightToIntervals(
     const e = sortedPoints[i + 1];
     if (s >= e) continue;
 
-    // Find style from existing highlight at this slice
-    const prev = existing.find((h) => h.startPos <= s && h.endPos >= e);
-    let bg = prev ? prev.bgColor : 'transparent';
-    let text = prev ? prev.textColor : 'inherit';
+    // Find style from existing highlights at this slice (inspect all overlapping highlights)
+    let bg = 'transparent';
+    let text = 'inherit';
+    for (const h of existing) {
+      if (h.startPos <= s && h.endPos >= e) {
+        if (h.bgColor && h.bgColor !== 'transparent') bg = h.bgColor;
+        if (h.textColor && h.textColor !== 'inherit') text = h.textColor;
+      }
+    }
 
     // If slice intersects the target range, apply updates
     if (s >= range.start && e <= range.end) {
@@ -73,7 +78,7 @@ export function applyHighlightToIntervals(
       last.endPos = sl.endPos;
     } else {
       merged.push({
-        id: `hl-${materialId}-${sl.startPos}-${sl.endPos}-${Date.now()}`,
+        id: `hl-${materialId}-${sl.startPos}-${sl.endPos}`,
         materialId,
         startPos: sl.startPos,
         endPos: sl.endPos,
