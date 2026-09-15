@@ -283,18 +283,19 @@ export const NoteModule: React.FC<NoteModuleProps> = ({
       )}
 
       {/* 2. Main Full-Screen Canvas Area (No outer rounded card, max space) */}
-      <div className="flex-1 overflow-y-auto flex flex-col relative">
+      <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
         {viewMode === 'edit' ? (
-          <div className="flex-1 flex flex-col w-full h-full pb-20 sm:pb-24">
+          <div className="flex-1 flex flex-col w-full h-full min-h-0">
             <RichTextEditor
               content={activeNote.markdownContent}
-              onChange={(html) => handleUpdateActiveNote({ markdownContent: html })}
+              onChange={(mdContent) => handleUpdateActiveNote({ markdownContent: mdContent })}
               placeholder="开始使用富文本与 [[双向链接]] 记录笔记..."
               className="flex-1 w-full h-full bg-white"
+              onWikiLinkClick={handleWikiLinkClick}
             />
           </div>
         ) : (
-          <div className="flex-1 w-full p-4 sm:p-8 max-w-4xl mx-auto font-serif-cn leading-relaxed">
+          <div className="flex-1 overflow-y-auto w-full p-4 sm:p-8 max-w-4xl mx-auto font-serif-cn leading-relaxed pb-24">
             {/* Markdown rendered with [[WikiLinks]], Highlights, Colors */}
             <MarkdownRenderer
               content={activeNote.markdownContent}
