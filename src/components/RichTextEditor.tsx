@@ -78,7 +78,19 @@ export function parseMarkdownToHtml(rawMarkdown: string): string {
   return md.render(text);
 }
 
-// Custom TipTap node for [[WikiLink]] that renders as a blue pill with 🔗 icon (no brackets!)
+// Calculate contrasting text brightness for solid color block labels
+function isLightColor(hex: string): boolean {
+  if (!hex || !hex.startsWith('#')) return true;
+  const clean = hex.replace('#', '');
+  if (clean.length < 6) return true;
+  const r = parseInt(clean.substring(0, 2), 16) || 0;
+  const g = parseInt(clean.substring(2, 4), 16) || 0;
+  const b = parseInt(clean.substring(4, 6), 16) || 0;
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 145;
+}
+
+// Custom TipTap node for [[WikiLink]] that renders cleanly without brackets
 export const WikiLinkNode = Node.create({
   name: 'wikiLink',
   group: 'inline',
@@ -121,8 +133,7 @@ export const WikiLinkNode = Node.create({
       mergeAttributes(HTMLAttributes, {
         'data-wiki-link': node.attrs.title,
         class:
-          'inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 cursor-pointer select-none hover:bg-sky-100 hover:text-sky-900 shadow-2xs transition align-baseline',
-        contenteditable: 'false',
+          'inline-flex items-center gap-1 px-1.5 py-0.2 mx-0.5 rounded text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 cursor-text select-text hover:bg-sky-100 align-baseline',
       }),
       `🔗 ${node.attrs.title}`,
     ];
@@ -145,7 +156,6 @@ export function RichTextEditor({
   onChange,
   className,
   placeholder = '开始记录双链笔记...',
-  onWikiLinkClick,
 }: RichTextEditorProps) {
   const [activeColorModal, setActiveColorModal] = useState<'text' | 'bg' | null>(null);
 
@@ -156,6 +166,9 @@ export function RichTextEditor({
   // Last used colors for quick 1-click apply
   const [lastTextColor, setLastTextColor] = useState<string>('#2563EB');
   const [lastHighlightColor, setLastHighlightColor] = useState<string>('#FEF08A');
+
+  const currentTextColor = activeSelectionTextColor || lastTextColor;
+  const currentHighlightColor = activeSelectionHighlightColor || lastHighlightColor;
 
   const editor = useEditor({
     extensions: [
@@ -190,16 +203,9 @@ export function RichTextEditor({
         class:
           'prose prose-slate max-w-none focus:outline-hidden min-h-[300px] font-serif-cn leading-relaxed text-slate-800',
       },
-      handleClick: (view, pos, event) => {
-        const target = event.target as HTMLElement;
-        const wikiSpan = target.closest('[data-wiki-link]');
-        if (wikiSpan && onWikiLinkClick) {
-          const title = wikiSpan.getAttribute('data-wiki-link');
-          if (title) {
-            onWikiLinkClick(title);
-            return true;
-          }
-        }
+      handleClick: () => {
+        // In edit mode: clicking inside [[WikiLink]] simply places cursor and allows editing
+        // NEVER trigger navigation in edit mode! Only preview mode navigates.
         return false;
       },
     },
@@ -231,16 +237,16 @@ export function RichTextEditor({
       .run();
   }, [editor]);
 
-  // Fast apply last text color
+  // Fast apply text color (live selection or last used)
   const handleFastApplyTextColor = () => {
     if (!editor) return;
-    editor.chain().focus().setColor(lastTextColor).run();
+    editor.chain().focus().setColor(currentTextColor).run();
   };
 
-  // Fast apply last highlight color
+  // Fast apply highlight color (live selection or last used)
   const handleFastApplyHighlightColor = () => {
     if (!editor) return;
-    editor.chain().focus().toggleHighlight({ color: lastHighlightColor }).run();
+    editor.chain().focus().toggleHighlight({ color: currentHighlightColor }).run();
   };
 
   if (!editor) return null;
@@ -407,56 +413,69 @@ export function RichTextEditor({
 
           <div className="w-[1px] h-4 bg-slate-300 mx-0.5 shrink-0" />
 
-          {/* 文字色 分段控件 (左边色块快捷应用，右边箭头/调色板打开记忆面板) */}
-          <div className="inline-flex items-center rounded-lg border border-slate-300/80 bg-white shadow-2xs overflow-hidden shrink-0">
+          {/* 文字色 并排胶囊按钮 (左边实心矩形色块快捷应用，右边下拉小图标打开调色板) */}
+          <div className="inline-flex items-stretch h-7 rounded-lg border border-slate-300 bg-white shadow-2xs overflow-hidden shrink-0">
             <button
               type="button"
               onClick={handleFastApplyTextColor}
-              className="flex items-center gap-1.5 px-2 py-1 hover:bg-slate-50 transition cursor-pointer text-xs font-medium text-slate-700"
-              title="点击直接应用文字色"
+              className="flex items-center justify-center px-2.5 h-full transition cursor-pointer hover:opacity-90 active:scale-95 border-r border-slate-200/80"
+              style={{
+                backgroundColor: currentTextColor,
+              }}
+              title={`点击直接应用文字色 (${currentTextColor})`}
             >
-              <div
-                className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-2xs"
-                style={{ backgroundColor: activeSelectionTextColor || lastTextColor }}
-              />
-              <span className="text-[11px] font-semibold">字色</span>
+              <span
+                className="text-[11px] font-bold tracking-tight select-none"
+                style={{
+                  color: isLightColor(currentTextColor) ? '#0f172a' : '#ffffff',
+                  textShadow: isLightColor(currentTextColor) ? 'none' : '0 1px 2px rgba(0,0,0,0.5)',
+                }}
+              >
+                字色
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setActiveColorModal((prev) => (prev === 'text' ? null : 'text'))}
-              className={`px-1.5 py-1 border-l border-slate-200 hover:bg-slate-100 transition cursor-pointer ${
+              className={`w-5 sm:w-6 flex items-center justify-center h-full hover:bg-slate-100 transition cursor-pointer ${
                 activeColorModal === 'text' ? 'bg-slate-100 text-[#2C4056]' : 'text-slate-500'
               }`}
-              title="打开完整调色板"
+              title="打开文字色彩记忆面板"
             >
-              <ChevronDown className="w-3 h-3" />
+              <ChevronDown className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* 高亮色 分段控件 (左边色块快捷应用，右边箭头/调色板打开记忆面板) */}
-          <div className="inline-flex items-center rounded-lg border border-slate-300/80 bg-white shadow-2xs overflow-hidden shrink-0">
+          {/* 高亮色 并排胶囊按钮 (左边实心矩形色块快捷应用，右边下拉小图标打开调色板) */}
+          <div className="inline-flex items-stretch h-7 rounded-lg border border-slate-300 bg-white shadow-2xs overflow-hidden shrink-0">
             <button
               type="button"
               onClick={handleFastApplyHighlightColor}
-              className="flex items-center gap-1.5 px-2 py-1 hover:bg-slate-50 transition cursor-pointer text-xs font-medium text-slate-700"
-              title="点击直接应用高亮背景色"
+              className="flex items-center justify-center px-2.5 h-full transition cursor-pointer hover:opacity-90 active:scale-95 border-r border-slate-200/80"
+              style={{
+                backgroundColor: currentHighlightColor,
+              }}
+              title={`点击直接应用高亮色 (${currentHighlightColor})`}
             >
-              <div
-                className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-2xs"
-                style={{ backgroundColor: activeSelectionHighlightColor || lastHighlightColor }}
-              />
-              <Highlighter className="w-3 h-3 text-amber-600" />
-              <span className="text-[11px] font-semibold">高亮</span>
+              <span
+                className="text-[11px] font-bold tracking-tight select-none"
+                style={{
+                  color: isLightColor(currentHighlightColor) ? '#0f172a' : '#ffffff',
+                  textShadow: isLightColor(currentHighlightColor) ? 'none' : '0 1px 2px rgba(0,0,0,0.5)',
+                }}
+              >
+                高亮
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setActiveColorModal((prev) => (prev === 'bg' ? null : 'bg'))}
-              className={`px-1.5 py-1 border-l border-slate-200 hover:bg-slate-100 transition cursor-pointer ${
+              className={`w-5 sm:w-6 flex items-center justify-center h-full hover:bg-slate-100 transition cursor-pointer ${
                 activeColorModal === 'bg' ? 'bg-slate-100 text-[#2C4056]' : 'text-slate-500'
               }`}
-              title="打开完整调色板"
+              title="打开高亮色彩记忆面板"
             >
-              <ChevronDown className="w-3 h-3" />
+              <ChevronDown className="w-3.5 h-3.5" />
             </button>
           </div>
 

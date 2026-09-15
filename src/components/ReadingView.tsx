@@ -316,6 +316,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     });
 
     setHighlights(newHighlights);
+    // Clear active DOM selection so no trailing vertical caret cursor or blue bar remains
+    window.getSelection()?.removeAllRanges();
     // Keep selectionInfo so user can chain background color + text color without re-selecting
   };
 
@@ -341,6 +343,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     });
 
     setHighlights(newHighlights);
+    window.getSelection()?.removeAllRanges();
     // Keep selectionInfo after delete so user can re-apply if desired
   };
 
@@ -689,7 +692,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
                   backgroundColor: bg,
                   color: tc,
                 }}
-                className="rounded-xs px-0.5 py-0.5 inline font-medium select-text"
+                className="inline font-medium select-text"
               >
                 {content}
               </mark>
