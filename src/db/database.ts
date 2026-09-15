@@ -7,6 +7,7 @@ import type {
   NoteLink,
   AiRecord,
   FolderItem,
+  SavedColorItem,
 } from '../types';
 
 export class TidalReadingDatabase extends Dexie {
@@ -17,6 +18,7 @@ export class TidalReadingDatabase extends Dexie {
   noteLinks!: Table<NoteLink, number>;
   aiRecords!: Table<AiRecord, string>;
   folders!: Table<FolderItem, string>;
+  userColors!: Table<SavedColorItem, string>;
 
   constructor() {
     super('TidalReadingDB');
@@ -37,10 +39,40 @@ export class TidalReadingDatabase extends Dexie {
       aiRecords: 'id, sourceText, createTime, noteId',
       folders: 'id, parentId, library, order, createdAt',
     });
+    this.version(3).stores({
+      readingMaterials: 'id, title, createTime, folderId, order',
+      questions: 'id, materialId, answer',
+      notes: 'id, title, createTime, materialId, folderId, order',
+      highlights: 'id, materialId, startPos, endPos',
+      noteLinks: '++id, sourceNoteId, targetNoteName',
+      aiRecords: 'id, sourceText, createTime, noteId',
+      folders: 'id, parentId, library, order, createdAt',
+      userColors: 'id, type, hex, order',
+    });
   }
 }
 
 export const db = new TidalReadingDatabase();
+
+export const DEFAULT_USER_COLORS: SavedColorItem[] = [
+  // 常用背景高亮预置色 (7种柔和高辨识度MD3护眼色)
+  { id: 'bg-yellow', type: 'bg', hex: '#FEF08A', label: '鹅黄', order: 0 },
+  { id: 'bg-green', type: 'bg', hex: '#BBF7D0', label: '浅绿', order: 1 },
+  { id: 'bg-blue', type: 'bg', hex: '#BAE6FD', label: '海蓝', order: 2 },
+  { id: 'bg-pink', type: 'bg', hex: '#FECDD3', label: '粉桃', order: 3 },
+  { id: 'bg-orange', type: 'bg', hex: '#FED7AA', label: '暖橙', order: 4 },
+  { id: 'bg-purple', type: 'bg', hex: '#DDD6FE', label: '淡紫', order: 5 },
+  { id: 'bg-mint', type: 'bg', hex: '#A7F3D0', label: '薄荷', order: 6 },
+
+  // 常用文字颜色预置色
+  { id: 'text-dark', type: 'text', hex: '#1E293B', label: '炭黑', order: 0 },
+  { id: 'text-blue', type: 'text', hex: '#2563EB', label: '宝蓝', order: 1 },
+  { id: 'text-green', type: 'text', hex: '#059669', label: '翠绿', order: 2 },
+  { id: 'text-red', type: 'text', hex: '#DC2626', label: '醒红', order: 3 },
+  { id: 'text-orange', type: 'text', hex: '#D97706', label: '金橙', order: 4 },
+  { id: 'text-purple', type: 'text', hex: '#7C3AED', label: '幽紫', order: 5 },
+  { id: 'text-pink', type: 'text', hex: '#DB2777', label: '玫红', order: 6 },
+];
 
 export const INITIAL_FOLDERS: FolderItem[] = [
   {
@@ -354,6 +386,12 @@ export async function initializeDatabaseIfEmpty(): Promise<void> {
             await db.notes.update(n.id, { folderId: targetFolder, order: i });
           }
         }
+      }
+
+      // Ensure userColors are populated with defaults if empty
+      const colorsCount = await db.userColors.count();
+      if (colorsCount === 0) {
+        await db.userColors.bulkPut(DEFAULT_USER_COLORS);
       }
     } catch (err) {
       console.error('Failed to initialize database:', err);

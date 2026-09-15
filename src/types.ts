@@ -105,3 +105,12 @@ export interface TextSelectionInfo {
     height: number;
   };
 }
+
+export interface SavedColorItem {
+  id: string;
+  type: 'bg' | 'text';
+  hex: string;
+  label: string;
+  isCustom?: boolean;
+  order: number;
+}

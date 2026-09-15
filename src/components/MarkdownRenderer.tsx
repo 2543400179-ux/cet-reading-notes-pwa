@@ -18,12 +18,12 @@ interface MarkdownRendererProps {
 
 /**
  * Custom High-Fidelity Markdown & WikiLink & HTML Highlight Renderer
- * Pure React, zero heavy external parser quirks, supports:
- * - H1, H2, H3, H4
+ * Pure React, robust parsing:
+ * - H1, H2, H3, H4 (handles prefixes like •, -, and cleans up accidental text)
  * - Blockquotes & code blocks
  * - Ordered & unordered lists
  * - Inline bold, italic, strikethrough, inline code
- * - <mark style="...">, ==highlight==, <span style="color: ...">
+ * - <mark style="...">, <mark data-color="...">, ==highlight==, <span style="color: ...">
  * - Interactive [[Wiki Links]] with auto existence detection & click handling
  */
 export function MarkdownRenderer({
@@ -40,6 +40,11 @@ export function MarkdownRenderer({
 }: MarkdownRendererProps) {
   if (!content) return null;
 
+  // Pre-normalize escaped WikiLinks: \[\[ -> [[, \]\] -> ]]
+  const normalizedContent = content
+    .replace(/\\\[\\\[/g, '[[')
+    .replace(/\\\]\\\]/g, ']]');
+
   // Context for inline rendering
   const inlineContext = {
     readingType,
@@ -51,7 +56,7 @@ export function MarkdownRenderer({
   };
 
   // Split into lines
-  const lines = content.split('\n');
+  const lines = normalizedContent.split('\n');
   const renderedElements: React.ReactNode[] = [];
   let inCodeBlock = false;
   let codeBlockBuffer: string[] = [];
@@ -65,7 +70,10 @@ export function MarkdownRenderer({
       if (inCodeBlock) {
         // Close code block
         renderedElements.push(
-          <div key={`code-${i}`} className="my-3 rounded-xl overflow-hidden bg-slate-900 text-slate-100 font-mono text-xs shadow-inner">
+          <div
+            key={`code-${i}`}
+            className="my-3 rounded-xl overflow-hidden bg-slate-900 text-slate-100 font-mono text-xs shadow-inner"
+          >
             {codeBlockLang && (
               <div className="px-3 py-1 bg-slate-800 text-slate-400 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-700/50">
                 {codeBlockLang}
@@ -92,51 +100,59 @@ export function MarkdownRenderer({
       continue;
     }
 
-    // Headings
-    if (/^#\s+/.test(line) || /^#([^#\s].*)$/.test(line)) {
-      const match = line.match(/^#\s*(.*)$/);
-      renderedElements.push(
-        <h1 key={`h1-${i}`} className="text-xl sm:text-2xl font-bold text-[#1E293B] mt-5 mb-2 pb-1.5 border-b border-slate-200">
-          {renderInlineText(match ? match[1] : line.slice(1), onWikiLinkClick, knownNoteTitles, `h1-in-${i}`, inlineContext)}
-        </h1>
-      );
-      continue;
-    }
-    if (/^##\s+/.test(line) || /^##([^#\s].*)$/.test(line)) {
-      const match = line.match(/^##\s*(.*)$/);
-      renderedElements.push(
-        <h2 key={`h2-${i}`} className="text-lg sm:text-xl font-bold text-[#2C4056] mt-4 mb-2">
-          {renderInlineText(match ? match[1] : line.slice(2), onWikiLinkClick, knownNoteTitles, `h2-in-${i}`, inlineContext)}
-        </h2>
-      );
-      continue;
-    }
-    if (/^###\s+/.test(line) || /^###([^#\s].*)$/.test(line)) {
-      const match = line.match(/^###\s*(.*)$/);
-      renderedElements.push(
-        <h3 key={`h3-${i}`} className="text-base sm:text-lg font-semibold text-[#3D536B] mt-3 mb-1.5">
-          {renderInlineText(match ? match[1] : line.slice(3), onWikiLinkClick, knownNoteTitles, `h3-in-${i}`, inlineContext)}
-        </h3>
-      );
-      continue;
-    }
-    if (/^####\s+/.test(line) || /^####([^#\s].*)$/.test(line)) {
-      const match = line.match(/^####\s*(.*)$/);
-      renderedElements.push(
-        <h4 key={`h4-${i}`} className="text-sm sm:text-base font-semibold text-[#4C6378] mt-2.5 mb-1">
-          {renderInlineText(match ? match[1] : line.slice(4), onWikiLinkClick, knownNoteTitles, `h4-in-${i}`, inlineContext)}
-        </h4>
-      );
+    // 1. Headings (Supports #, ##, ###, ####, even when prefixed by bullets or placeholder text)
+    const headingMatch = line.trim().match(/^(?:[-*+•]\s*)?(?:无序列表项\s*)?(#{1,6})\s*(.*)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const headingText = headingMatch[2].replace(/^无序列表项\s*/, '').trim();
+
+      if (level === 1) {
+        renderedElements.push(
+          <h1
+            key={`h1-${i}`}
+            className="text-xl sm:text-2xl font-bold text-[#1E293B] mt-5 mb-2 pb-1.5 border-b border-slate-200"
+          >
+            {renderInlineText(headingText, onWikiLinkClick, knownNoteTitles, `h1-in-${i}`, inlineContext)}
+          </h1>
+        );
+      } else if (level === 2) {
+        renderedElements.push(
+          <h2
+            key={`h2-${i}`}
+            className="text-lg sm:text-xl font-bold text-[#2C4056] mt-4 mb-2"
+          >
+            {renderInlineText(headingText, onWikiLinkClick, knownNoteTitles, `h2-in-${i}`, inlineContext)}
+          </h2>
+        );
+      } else if (level === 3) {
+        renderedElements.push(
+          <h3
+            key={`h3-${i}`}
+            className="text-base sm:text-lg font-semibold text-[#3D536B] mt-3 mb-1.5"
+          >
+            {renderInlineText(headingText, onWikiLinkClick, knownNoteTitles, `h3-in-${i}`, inlineContext)}
+          </h3>
+        );
+      } else {
+        renderedElements.push(
+          <h4
+            key={`h4-${i}`}
+            className="text-sm sm:text-base font-semibold text-[#4C6378] mt-2.5 mb-1"
+          >
+            {renderInlineText(headingText, onWikiLinkClick, knownNoteTitles, `h4-in-${i}`, inlineContext)}
+          </h4>
+        );
+      }
       continue;
     }
 
-    // Horizontal rule
+    // 2. Horizontal rule
     if (/^(\*\*\*|---|___)$/.test(line.trim())) {
       renderedElements.push(<hr key={`hr-${i}`} className="my-4 border-slate-200" />);
       continue;
     }
 
-    // Blockquote
+    // 3. Blockquote
     if (line.startsWith('> ')) {
       renderedElements.push(
         <blockquote
@@ -149,9 +165,11 @@ export function MarkdownRenderer({
       continue;
     }
 
-    // Unordered list
-    if (/^(\*|-|\+)\s/.test(line)) {
-      const listText = line.replace(/^(\*|-|\+)\s/, '');
+    // 4. Unordered list (Supports -, *, +, • and cleans up any accidental placeholder strings)
+    if (/^(\*|-|\+|•)\s/.test(line.trim())) {
+      let listText = line.trim().replace(/^(\*|-|\+|•)\s+/, '');
+      listText = listText.replace(/^无序列表项\s*/, '');
+
       renderedElements.push(
         <li key={`ul-${i}`} className="ml-5 list-disc text-sm text-slate-800 leading-relaxed my-1">
           {renderInlineText(listText, onWikiLinkClick, knownNoteTitles, `ul-in-${i}`, inlineContext)}
@@ -160,30 +178,35 @@ export function MarkdownRenderer({
       continue;
     }
 
-    // Ordered list
-    if (/^\d+\.\s/.test(line)) {
-      const match = line.match(/^(\d+)\.\s(.*)$/);
+    // 5. Ordered list
+    if (/^\d+\.\s/.test(line.trim())) {
+      const match = line.trim().match(/^(\d+)\.\s(.*)$/);
       if (match) {
         renderedElements.push(
           <div key={`ol-${i}`} className="flex items-start gap-2 ml-1 text-sm text-slate-800 leading-relaxed my-1">
-            <span className="shrink-0 w-5 text-right font-medium text-slate-500 font-mono text-xs mt-0.5">{match[1]}.</span>
-            <div className="flex-1">{renderInlineText(match[2], onWikiLinkClick, knownNoteTitles, `ol-in-${i}`, inlineContext)}</div>
+            <span className="shrink-0 w-5 text-right font-medium text-slate-500 font-mono text-xs mt-0.5">
+              {match[1]}.
+            </span>
+            <div className="flex-1">
+              {renderInlineText(match[2], onWikiLinkClick, knownNoteTitles, `ol-in-${i}`, inlineContext)}
+            </div>
           </div>
         );
         continue;
       }
     }
 
-    // Empty line
+    // 6. Empty line
     if (!line.trim()) {
       renderedElements.push(<div key={`sp-${i}`} className="h-2" />);
       continue;
     }
 
-    // Standard paragraph
+    // 7. Standard paragraph
+    let pText = line.replace(/^无序列表项\s*/, '');
     renderedElements.push(
       <p key={`p-${i}`} className="text-sm text-slate-800 leading-relaxed my-1.5">
-        {renderInlineText(line, onWikiLinkClick, knownNoteTitles, `p-in-${i}`, inlineContext)}
+        {renderInlineText(pText, onWikiLinkClick, knownNoteTitles, `p-in-${i}`, inlineContext)}
       </p>
     );
   }
@@ -208,6 +231,13 @@ export function renderInlineText(
     onClozeClearWord?: (questionId: string) => void;
   }
 ): React.ReactNode {
+  if (!rawText) return null;
+
+  // Unescape any escaped WikiLink brackets in text
+  const cleanRaw = rawText
+    .replace(/\\\[\\\[/g, '[[')
+    .replace(/\\\]\\\]/g, ']]');
+
   // Regex to match:
   // 1. [[Wiki Links]]
   // 2. <mark ...>...</mark>
@@ -218,19 +248,23 @@ export function renderInlineText(
   // 7. *italic*
   // 8. ~~strikethrough~~
   // 9. [26] for cloze blanks
-  
-  const regex = /(\[\[.*?\]\]|<mark[^>]*>[\s\S]*?<\/mark>|<span[^>]*>[\s\S]*?<\/span>|==[\s\S]*?==|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|\[\d+\])/g;
-  const parts = rawText.split(regex);
+  const regex = /(\[\[[\s\S]*?\]\]|<mark[^>]*>[\s\S]*?<\/mark>|<span[^>]*>[\s\S]*?<\/span>|==[\s\S]*?==|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|\[\d+\])/g;
+  const parts = cleanRaw.split(regex);
 
   return parts.map((part, index) => {
     const key = `${keyPrefix}-${index}`;
     if (!part) return null;
 
-    // 1. [[Wiki Link]]
+    // 1. [[Wiki Link]] (Handles nested tags if user highlighted inside title, normalizes colons)
     if (part.startsWith('[[') && part.endsWith(']]')) {
-      const linkTitle = part.slice(2, -2).trim();
+      const rawTitle = part.slice(2, -2).trim();
+      // Strip any inner HTML markup from the target title (e.g. if a mark was placed inside [[ ]])
+      const linkTitle = rawTitle.replace(/<[^>]+>/g, '').trim();
+
+      // Normalize Chinese colon '：' and English colon ':' for seamless matching
+      const norm = (s: string) => s.replace(/：/g, ':').trim().toLowerCase();
       const exists = knownNoteTitles.some(
-        (t) => t.trim().toLowerCase() === linkTitle.toLowerCase()
+        (t) => norm(t) === norm(linkTitle)
       );
 
       return (
@@ -255,36 +289,54 @@ export function renderInlineText(
       );
     }
 
-    // 2. <mark ...>...</mark>
+    // 2. <mark ...>...</mark> (Supports data-color, style background-color, and recursive inner parsing)
     if (part.startsWith('<mark') && part.endsWith('</mark>')) {
       const bgMatch = part.match(/background(?:-color)?:\s*([^;"]+)/i);
+      const dataColorMatch = part.match(/data-color=["']([^"']+)["']/i);
       const colorMatch = part.match(/(?:^|;|\s)color:\s*([^;"]+)/i);
-      const textMatch = part.match(/<mark[^>]*>(.*?)<\/mark>/s);
+      const textMatch = part.match(/<mark[^>]*>([\s\S]*?)<\/mark>/i);
       const inner = textMatch ? textMatch[1] : '';
-      const bgColor = bgMatch ? bgMatch[1].trim() : '#FEF08A';
+      
+      const bgColor = bgMatch
+        ? bgMatch[1].trim()
+        : dataColorMatch
+        ? dataColorMatch[1].trim()
+        : '#FEF08A';
       const textColor = colorMatch ? colorMatch[1].trim() : 'inherit';
 
       return (
         <mark
           key={key}
-          className="px-1 py-0.5 rounded text-inherit font-medium mx-0.5"
-          style={{ backgroundColor: bgColor, color: textColor }}
+          className="px-1 py-0.5 rounded font-medium mx-0.5 inline relative"
+          style={{
+            backgroundColor: bgColor !== 'transparent' ? bgColor : undefined,
+            color: textColor !== 'inherit' ? textColor : undefined,
+          }}
         >
-          {inner}
+          {renderInlineText(inner, onWikiLinkClick, knownNoteTitles, `${key}-in`, context)}
         </mark>
       );
     }
 
-    // 3. <span style="color: ...">...</span>
+    // 3. <span style="color: ...">...</span> (Supports color and background-color, recursive inner parsing)
     if (part.startsWith('<span') && part.endsWith('</span>')) {
       const colorMatch = part.match(/color:\s*([^;"]+)/i);
-      const textMatch = part.match(/<span[^>]*>(.*?)<\/span>/s);
+      const bgMatch = part.match(/background(?:-color)?:\s*([^;"]+)/i);
+      const textMatch = part.match(/<span[^>]*>([\s\S]*?)<\/span>/i);
       const inner = textMatch ? textMatch[1] : '';
-      const textColor = colorMatch ? colorMatch[1].trim() : '#1E293B';
+      const textColor = colorMatch ? colorMatch[1].trim() : undefined;
+      const bgColor = bgMatch ? bgMatch[1].trim() : undefined;
 
       return (
-        <span key={key} style={{ color: textColor }} className="font-medium">
-          {inner}
+        <span
+          key={key}
+          style={{
+            color: textColor,
+            backgroundColor: bgColor,
+          }}
+          className="font-medium"
+        >
+          {renderInlineText(inner, onWikiLinkClick, knownNoteTitles, `${key}-in`, context)}
         </span>
       );
     }
@@ -293,7 +345,7 @@ export function renderInlineText(
     if (part.startsWith('==') && part.endsWith('==') && part.length >= 4) {
       return (
         <mark key={key} className="bg-amber-200 text-slate-900 px-1 py-0.5 rounded mx-0.5 font-medium">
-          {part.slice(2, -2)}
+          {renderInlineText(part.slice(2, -2), onWikiLinkClick, knownNoteTitles, `${key}-in`, context)}
         </mark>
       );
     }
@@ -311,7 +363,7 @@ export function renderInlineText(
     if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
       return (
         <strong key={key} className="font-bold text-[#1E293B]">
-          {part.slice(2, -2)}
+          {renderInlineText(part.slice(2, -2), onWikiLinkClick, knownNoteTitles, `${key}-b`, context)}
         </strong>
       );
     }
@@ -320,7 +372,7 @@ export function renderInlineText(
     if (part.startsWith('*') && part.endsWith('*') && part.length >= 2) {
       return (
         <em key={key} className="italic text-slate-800">
-          {part.slice(1, -1)}
+          {renderInlineText(part.slice(1, -1), onWikiLinkClick, knownNoteTitles, `${key}-i`, context)}
         </em>
       );
     }
@@ -329,7 +381,7 @@ export function renderInlineText(
     if (part.startsWith('~~') && part.endsWith('~~') && part.length >= 4) {
       return (
         <del key={key} className="line-through text-slate-400">
-          {part.slice(2, -2)}
+          {renderInlineText(part.slice(2, -2), onWikiLinkClick, knownNoteTitles, `${key}-del`, context)}
         </del>
       );
     }
@@ -356,4 +408,3 @@ export function renderInlineText(
     return <React.Fragment key={key}>{part}</React.Fragment>;
   });
 }
-// synced

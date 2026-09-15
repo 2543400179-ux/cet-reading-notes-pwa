@@ -9,7 +9,7 @@ import type {
 } from '../types';
 import { db } from '../db/database';
 import { QuestionCard } from './QuestionCard';
-import { TextSelectionPopover } from './TextSelectionPopover';
+import { BottomSelectionBar } from './BottomSelectionBar';
 import { segmentTextWithHighlights, getSelectionCharOffsets } from '../utils/highlightHelper';
 import { MarkdownEditorToolbar } from './MarkdownEditorToolbar';
 import { MatchQuestionSection } from './MatchQuestionSection';
@@ -237,42 +237,63 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
   // Text selection handler
   const handleTextSelection = () => {
+    if (readEditMode === 'pencil') return;
+
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !passageRef.current) {
-      setSelectionInfo(null);
+      // Avoid clearing if user clicked on the bottom bar
+      const activeEl = document.activeElement;
+      const bottomBar = document.getElementById('bottom-selection-bar');
+      if (bottomBar && (bottomBar.contains(activeEl) || bottomBar.contains(document.activeElement))) {
+        return;
+      }
       return;
     }
 
     const text = selection.toString().trim();
     if (!text) {
-      setSelectionInfo(null);
       return;
     }
 
-    const range = selection.getRangeAt(0);
-    if (!passageRef.current.contains(range.commonAncestorContainer)) {
-      setSelectionInfo(null);
-      return;
+    try {
+      const range = selection.getRangeAt(0);
+      if (!passageRef.current.contains(range.commonAncestorContainer)) {
+        return;
+      }
+
+      const offsets = getSelectionCharOffsets(passageRef.current, range);
+      if (!offsets) return;
+
+      const rect = range.getBoundingClientRect();
+      setSelectionInfo({
+        text,
+        startPos: offsets.start,
+        endPos: offsets.end,
+        rect: {
+          top: rect.top,
+          left: rect.left,
+          bottom: rect.bottom,
+          right: rect.right,
+          width: rect.width,
+          height: rect.height,
+        },
+      });
+    } catch {
+      // Ignore range calculation errors
     }
-
-    const offsets = getSelectionCharOffsets(passageRef.current, range);
-    if (!offsets) return;
-
-    const rect = range.getBoundingClientRect();
-    setSelectionInfo({
-      text,
-      startPos: offsets.start,
-      endPos: offsets.end,
-      rect: {
-        top: rect.top,
-        left: rect.left,
-        bottom: rect.bottom,
-        right: rect.right,
-        width: rect.width,
-        height: rect.height,
-      },
-    });
   };
+
+  // Listen to document selectionchange for native mobile cursor adjustment
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      handleTextSelection();
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, [readEditMode]);
 
   // Add Highlight
   const handleAddHighlight = async (bgColor: string, textColor: string) => {
@@ -660,6 +681,11 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
                   title="点击管理此高亮"
                 >
                   {content}
+                  {/* Subtle corner badge at top-right corner, never obstructing text */}
+                  <span
+                    className="absolute -top-1 -right-0.5 w-1.5 h-1.5 rounded-full border border-white shadow-2xs pointer-events-none"
+                    style={{ backgroundColor: hl.textColor !== 'inherit' && hl.textColor ? hl.textColor : '#F59E0B' }}
+                  />
                 </mark>
               );
             });
@@ -867,32 +893,36 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         )}
       </div>
 
-      {/* Text Selection Popover */}
-      <TextSelectionPopover
+      {/* Fixed Bottom Selection Action Bar (Replaces floating popover to prevent native conflict) */}
+      <BottomSelectionBar
         selectionInfo={selectionInfo}
         onAiAnalyze={(text) => {
           if (!currentMaterial) return;
           onAiAnalyze(text, currentMaterial.markdownContent.slice(0, 300));
         }}
-        onAddHighlight={handleAddHighlight}
-        onCreateNoteFromSelection={(text, startPos, endPos) => {
+        onApplyHighlight={handleAddHighlight}
+        onCreateNote={(text, startPos, endPos) => {
           if (!currentMaterial) return;
           onCreateNoteWithAnchor(text, currentMaterial.id, startPos, endPos);
         }}
-        onClose={() => setSelectionInfo(null)}
+        onClose={() => {
+          setSelectionInfo(null);
+          window.getSelection()?.removeAllRanges();
+        }}
       />
 
       {/* Active Highlight Management Popover */}
       {activeHighlight && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#2C4056] text-white px-3.5 py-2 rounded-lg shadow-xl flex items-center gap-2.5 animate-in fade-in zoom-in-95 text-xs">
-          <span className="text-[11px] text-slate-200 font-sans">高亮色：</span>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-[#1E293B] text-white px-3.5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in fade-in zoom-in-95 text-xs border border-white/20">
+          <span className="text-[11px] text-slate-300 font-sans">高亮色：</span>
           <div className="flex items-center gap-1.5">
             {[
-              { bg: '#FEF08A', text: '#1E293B' },
-              { bg: '#BBF7D0', text: '#14532D' },
-              { bg: '#BAE6FD', text: '#0369A1' },
-              { bg: '#FECDD3', text: '#881337' },
-              { bg: '#DDD6FE', text: '#4C1D95' },
+              { bg: '#FEF08A', text: '#1E293B', label: '鹅黄' },
+              { bg: '#BBF7D0', text: '#14532D', label: '浅绿' },
+              { bg: '#BAE6FD', text: '#0369A1', label: '海蓝' },
+              { bg: '#FECDD3', text: '#881337', label: '粉桃' },
+              { bg: '#FED7AA', text: '#9A3412', label: '暖橙' },
+              { bg: '#DDD6FE', text: '#4C1D95', label: '淡紫' },
             ].map((p, i) => (
               <button
                 key={i}
@@ -900,8 +930,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
                 onClick={() =>
                   handleChangeHighlightColor(activeHighlight, p.bg, p.text)
                 }
-                className="w-4.5 h-4.5 rounded-full border border-white/40 cursor-pointer"
+                className="w-5 h-5 rounded-full border border-white/40 cursor-pointer hover:scale-115 active:scale-95 transition-transform"
                 style={{ backgroundColor: p.bg }}
+                title={`修改为此颜色：${p.label}`}
               />
             ))}
           </div>
@@ -911,7 +942,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           <button
             type="button"
             onClick={() => handleDeleteHighlight(activeHighlight.id)}
-            className="flex items-center gap-1 text-xs text-rose-300 hover:text-rose-100 cursor-pointer font-sans"
+            className="flex items-center gap-1 text-xs text-rose-300 hover:text-rose-100 cursor-pointer font-sans px-1.5 py-1 rounded hover:bg-white/10"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>删除</span>
@@ -920,7 +951,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveHighlight(null)}
-            className="text-xs text-slate-300 hover:text-white ml-1 cursor-pointer font-sans"
+            className="text-xs text-slate-300 hover:text-white px-1.5 py-1 rounded hover:bg-white/10 cursor-pointer font-sans"
           >
             关闭
           </button>
