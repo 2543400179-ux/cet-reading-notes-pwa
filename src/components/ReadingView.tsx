@@ -10,7 +10,11 @@ import type {
 import { db } from '../db/database';
 import { QuestionCard } from './QuestionCard';
 import { BottomSelectionBar } from './BottomSelectionBar';
-import { segmentTextWithHighlights, getSelectionCharOffsets } from '../utils/highlightHelper';
+import {
+  segmentTextWithHighlights,
+  getSelectionCharOffsets,
+  applyHighlightToIntervals,
+} from '../utils/highlightHelper';
 import { MarkdownEditorToolbar } from './MarkdownEditorToolbar';
 import { MatchQuestionSection } from './MatchQuestionSection';
 import { ClozeQuestionSection } from './ClozeQuestionSection';
@@ -67,9 +71,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
   // Text selection state
   const [selectionInfo, setSelectionInfo] = useState<TextSelectionInfo | null>(null);
-
-  // Active clicked highlight for management
-  const [activeHighlight, setActiveHighlight] = useState<Highlight | null>(null);
 
   // Floating Sheet state
   const [sheetHeight, setSheetHeight] = useState<number>(() =>
@@ -295,43 +296,54 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     };
   }, [readEditMode]);
 
-  // Add Highlight
-  const handleAddHighlight = async (bgColor: string, textColor: string) => {
+  // Apply Highlight (Interval-based: replaces color, preserves non-conflicting properties, prevents duplication)
+  const handleApplyHighlight = async (updates: { bgColor?: string; textColor?: string }) => {
     if (!selectionInfo || !selectedMaterialId) return;
 
-    const newHl: Highlight = {
-      id: `hl-${Date.now()}`,
-      materialId: selectedMaterialId,
-      startPos: selectionInfo.startPos,
-      endPos: selectionInfo.endPos,
-      bgColor,
-      textColor,
-      text: selectionInfo.text,
-    };
+    const newHighlights = applyHighlightToIntervals(
+      highlights,
+      { start: selectionInfo.startPos, end: selectionInfo.endPos },
+      updates,
+      selectedMaterialId
+    );
 
-    await db.highlights.add(newHl);
-    setHighlights((prev) => [...prev, newHl]);
+    // Save updated highlights to IndexedDB atomically
+    await db.transaction('rw', db.highlights, async () => {
+      await db.highlights.where('materialId').equals(selectedMaterialId).delete();
+      if (newHighlights.length > 0) {
+        await db.highlights.bulkAdd(newHighlights);
+      }
+    });
+
+    setHighlights(newHighlights);
     setSelectionInfo(null);
     window.getSelection()?.removeAllRanges();
   };
 
-  // Delete Highlight
-  const handleDeleteHighlight = async (hlId: string) => {
-    await db.highlights.delete(hlId);
-    setHighlights((prev) => prev.filter((h) => h.id !== hlId));
-    setActiveHighlight(null);
-  };
+  // Delete Highlight in selected range
+  const handleDeleteHighlightRange = async (startPos?: number, endPos?: number) => {
+    if (!selectedMaterialId) return;
+    const start = startPos !== undefined ? startPos : selectionInfo?.startPos;
+    const end = endPos !== undefined ? endPos : selectionInfo?.endPos;
+    if (start === undefined || end === undefined || start >= end) return;
 
-  // Change Highlight Color
-  const handleChangeHighlightColor = async (
-    hl: Highlight,
-    bgColor: string,
-    textColor: string
-  ) => {
-    const updated = { ...hl, bgColor, textColor };
-    await db.highlights.put(updated);
-    setHighlights((prev) => prev.map((h) => (h.id === hl.id ? updated : h)));
-    setActiveHighlight(updated);
+    const newHighlights = applyHighlightToIntervals(
+      highlights,
+      { start, end },
+      { bgColor: 'transparent', textColor: 'inherit' },
+      selectedMaterialId
+    );
+
+    await db.transaction('rw', db.highlights, async () => {
+      await db.highlights.where('materialId').equals(selectedMaterialId).delete();
+      if (newHighlights.length > 0) {
+        await db.highlights.bulkAdd(newHighlights);
+      }
+    });
+
+    setHighlights(newHighlights);
+    setSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
   };
 
   // Floating Sheet Drag Handlers
@@ -664,32 +676,27 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           }
 
           if (seg.highlights && seg.highlights.length > 0) {
-            // Apply all highlights as nested elements
-            seg.highlights.forEach((hl, i) => {
-              content = (
-                <mark
-                  key={`hl-${hl.id}-${i}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveHighlight(hl);
-                  }}
-                  style={{
-                    backgroundColor: hl.bgColor !== 'transparent' ? hl.bgColor : undefined,
-                    color: hl.textColor !== 'inherit' ? hl.textColor : undefined,
-                  }}
-                  className={`rounded-xs px-0.5 py-0.5 cursor-pointer hover:opacity-90 transition-all inline relative ${i === 0 ? 'font-medium' : ''}`}
-                  title="点击管理此高亮"
-                >
-                  {content}
-                  {/* Subtle corner badge at top-right corner, never obstructing text */}
-                  <span
-                    className="absolute -top-1 -right-0.5 w-1.5 h-1.5 rounded-full border border-white shadow-2xs pointer-events-none"
-                    style={{ backgroundColor: hl.textColor !== 'inherit' && hl.textColor ? hl.textColor : '#F59E0B' }}
-                  />
-                </mark>
-              );
-            });
-            
+            // Determine active background and text colors
+            let bg: string | undefined = undefined;
+            let tc: string | undefined = undefined;
+            for (const hl of seg.highlights) {
+              if (hl.bgColor && hl.bgColor !== 'transparent') bg = hl.bgColor;
+              if (hl.textColor && hl.textColor !== 'inherit') tc = hl.textColor;
+            }
+
+            content = (
+              <mark
+                key={`hl-${seg.startPos}-${seg.endPos}`}
+                style={{
+                  backgroundColor: bg,
+                  color: tc,
+                }}
+                className="rounded-xs px-0.5 py-0.5 inline font-medium select-text"
+              >
+                {content}
+              </mark>
+            );
+
             return (
               <span key={idx} id={`anchor-pos-${seg.startPos}`}>
                 {content}
@@ -900,7 +907,8 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           if (!currentMaterial) return;
           onAiAnalyze(text, currentMaterial.markdownContent.slice(0, 300));
         }}
-        onApplyHighlight={handleAddHighlight}
+        onApplyHighlight={handleApplyHighlight}
+        onDeleteHighlight={(start, end) => handleDeleteHighlightRange(start, end)}
         onCreateNote={(text, startPos, endPos) => {
           if (!currentMaterial) return;
           onCreateNoteWithAnchor(text, currentMaterial.id, startPos, endPos);
@@ -910,53 +918,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           window.getSelection()?.removeAllRanges();
         }}
       />
-
-      {/* Active Highlight Management Popover */}
-      {activeHighlight && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-[#1E293B] text-white px-3.5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in fade-in zoom-in-95 text-xs border border-white/20">
-          <span className="text-[11px] text-slate-300 font-sans">高亮色：</span>
-          <div className="flex items-center gap-1.5">
-            {[
-              { bg: '#FEF08A', text: '#1E293B', label: '鹅黄' },
-              { bg: '#BBF7D0', text: '#14532D', label: '浅绿' },
-              { bg: '#BAE6FD', text: '#0369A1', label: '海蓝' },
-              { bg: '#FECDD3', text: '#881337', label: '粉桃' },
-              { bg: '#FED7AA', text: '#9A3412', label: '暖橙' },
-              { bg: '#DDD6FE', text: '#4C1D95', label: '淡紫' },
-            ].map((p, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() =>
-                  handleChangeHighlightColor(activeHighlight, p.bg, p.text)
-                }
-                className="w-5 h-5 rounded-full border border-white/40 cursor-pointer hover:scale-115 active:scale-95 transition-transform"
-                style={{ backgroundColor: p.bg }}
-                title={`修改为此颜色：${p.label}`}
-              />
-            ))}
-          </div>
-
-          <div className="w-[1px] h-3.5 bg-white/20" />
-
-          <button
-            type="button"
-            onClick={() => handleDeleteHighlight(activeHighlight.id)}
-            className="flex items-center gap-1 text-xs text-rose-300 hover:text-rose-100 cursor-pointer font-sans px-1.5 py-1 rounded hover:bg-white/10"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>删除</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveHighlight(null)}
-            className="text-xs text-slate-300 hover:text-white px-1.5 py-1 rounded hover:bg-white/10 cursor-pointer font-sans"
-          >
-            关闭
-          </button>
-        </div>
-      )}
     </div>
   );
 };
