@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import type {
   ReadingMaterial,
   Question,
@@ -93,6 +93,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const savedPassageScrollTopRef = useRef<number>(0);
   const materialTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
+  const availableNoteTitles = useMemo(() => availableNotes.map((n) => n.title), [availableNotes]);
 
   // Load available notes for wiki-link suggestions
   useEffect(() => {
@@ -644,6 +645,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
             onChange={(html) => handleUpdateMaterialContent(html)}
             placeholder="在此直接原地修改富文本内容..."
             className="w-full flex-1 bg-white"
+            knownNoteTitles={availableNoteTitles}
           />
         </div>
       );

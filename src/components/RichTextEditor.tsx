@@ -1,11 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Highlight } from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { Markdown } from 'tiptap-markdown';
-import { Node, mergeAttributes } from '@tiptap/core';
+import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import MarkdownIt from 'markdown-it';
 import { ColorMemoryPanel } from './ColorMemoryPanel';
 import {
@@ -31,6 +33,7 @@ interface RichTextEditorProps {
   onChange: (markdown: string) => void;
   className?: string;
   placeholder?: string;
+  knownNoteTitles?: string[];
   onWikiLinkClick?: (title: string) => void;
 }
 
@@ -44,9 +47,9 @@ const md = new MarkdownIt({
 /**
  * Pre-processes raw markdown into standard HTML for TipTap:
  * - Cleans up escaped brackets: \[\[ -> [[
+ * - Converts any legacy HTML spans <span data-wiki-link="Title"> back to [[Title]]
  * - Cleans up headings with list prefixes: e.g. "• 无序列表项## 标题" -> "## 标题"
- * - Converts [[Title]] into <span data-wiki-link="Title">🔗 Title</span>
- * - Renders into HTML so TipTap creates real H1-H3, Bold, Italic, WikiLink nodes without markdown symbols
+ * - Keeps [[Title]] intact as native editable text so TipTap allows normal editing without read-only barriers
  */
 export function parseMarkdownToHtml(rawMarkdown: string): string {
   if (!rawMarkdown) return '';
@@ -56,6 +59,9 @@ export function parseMarkdownToHtml(rawMarkdown: string): string {
     .replace(/\\\]\\\]/g, ']]')
     .replace(/\\\*/g, '*')
     .replace(/\\_/g, '_');
+
+  // Convert any legacy <span data-wiki-link="Title"> back to [[Title]]
+  text = text.replace(/<span\s+data-wiki-link="([^"]+)"[^>]*>[\s\S]*?<\/span>/gi, '[[$1]]');
 
   // Fix corrupted heading lines where list bullets or placeholders got attached
   text = text
@@ -68,12 +74,6 @@ export function parseMarkdownToHtml(rawMarkdown: string): string {
       return line.replace(/^•\s*/, '- ').replace(/^无序列表项\s*/, '');
     })
     .join('\n');
-
-  // Convert [[WikiLink]] to custom HTML span for WikiLinkNode to parse
-  text = text.replace(/\[\[([^\]\n]+)\]\]/g, (_, title) => {
-    const cleanTitle = title.trim();
-    return `<span data-wiki-link="${cleanTitle}">🔗 ${cleanTitle}</span>`;
-  });
 
   return md.render(text);
 }
@@ -90,64 +90,60 @@ function isLightColor(hex: string): boolean {
   return yiq >= 145;
 }
 
-// Custom TipTap node for [[WikiLink]] that renders cleanly without brackets
-export const WikiLinkNode = Node.create({
-  name: 'wikiLink',
-  group: 'inline',
-  inline: true,
-  selectable: true,
-  atom: true,
+/**
+ * Custom TipTap Extension for [[WikiLink]] inline decorations:
+ * - Keeps the text 100% normal editable text (no atomic nodes, no read-only traps)
+ * - Highlights existing notes in blue (.tiptap-wikilink-existing)
+ * - Highlights new/non-existing notes in gray (.tiptap-wikilink-new)
+ */
+export const WikiLinkDecoration = Extension.create<{
+  getKnownTitles: () => string[];
+}>({
+  name: 'wikiLinkDecoration',
 
-  addAttributes() {
+  addOptions() {
     return {
-      title: {
-        default: '新笔记',
-        parseHTML: (element) => {
-          return (
-            element.getAttribute('data-wiki-link') ||
-            element.textContent?.replace(/^[🔗\s\[]+|[\]\s]+$/g, '') ||
-            '新笔记'
-          );
-        },
-        renderHTML: (attributes) => ({
-          'data-wiki-link': attributes.title,
-        }),
-      },
+      getKnownTitles: () => [],
     };
   },
 
-  parseHTML() {
+  addProseMirrorPlugins() {
+    const extension = this;
     return [
-      {
-        tag: 'span[data-wiki-link]',
-      },
-      {
-        tag: 'a[data-wiki-link]',
-      },
-    ];
-  },
+      new Plugin({
+        key: new PluginKey('wikiLinkDecorationPlugin'),
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+            const doc = state.doc;
+            const known = extension.options.getKnownTitles() || [];
+            const norm = (s: string) => s.replace(/：/g, ':').trim().toLowerCase();
 
-  renderHTML({ node, HTMLAttributes }) {
-    return [
-      'span',
-      mergeAttributes(HTMLAttributes, {
-        'data-wiki-link': node.attrs.title,
-        class:
-          'inline-flex items-center gap-1 px-1.5 py-0.2 mx-0.5 rounded text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 cursor-text select-text hover:bg-sky-100 align-baseline',
+            doc.descendants((node, pos) => {
+              if (!node.isText || !node.text) return;
+
+              const regex = /\[\[([^\]\n]+)\]\]/g;
+              let match;
+              while ((match = regex.exec(node.text)) !== null) {
+                const start = pos + match.index;
+                const end = start + match[0].length;
+                const innerTitle = match[1].trim();
+                const exists = known.some((t: string) => norm(t) === norm(innerTitle));
+
+                decorations.push(
+                  Decoration.inline(start, end, {
+                    class: exists ? 'tiptap-wikilink-existing' : 'tiptap-wikilink-new',
+                    'data-wiki-title': innerTitle,
+                  })
+                );
+              }
+            });
+
+            return DecorationSet.create(doc, decorations);
+          },
+        },
       }),
-      `🔗 ${node.attrs.title}`,
     ];
-  },
-
-  addStorage() {
-    return {
-      markdown: {
-        serialize(state: any, node: any) {
-          state.write(`[[${node.attrs.title}]]`);
-        },
-        parse: {},
-      },
-    };
   },
 });
 
@@ -156,6 +152,7 @@ export function RichTextEditor({
   onChange,
   className,
   placeholder = '开始记录双链笔记...',
+  knownNoteTitles = [],
 }: RichTextEditorProps) {
   const [activeColorModal, setActiveColorModal] = useState<'text' | 'bg' | null>(null);
 
@@ -170,7 +167,13 @@ export function RichTextEditor({
   const currentTextColor = activeSelectionTextColor || lastTextColor;
   const currentHighlightColor = activeSelectionHighlightColor || lastHighlightColor;
 
+  const knownTitlesRef = useRef<string[]>(knownNoteTitles);
+  useEffect(() => {
+    knownTitlesRef.current = knownNoteTitles;
+  }, [knownNoteTitles]);
+
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4] },
@@ -178,7 +181,9 @@ export function RichTextEditor({
       Highlight.configure({ multicolor: true }),
       TextStyle,
       Color,
-      WikiLinkNode,
+      WikiLinkDecoration.configure({
+        getKnownTitles: () => knownTitlesRef.current,
+      }),
       Markdown.configure({
         html: true,
         transformPastedText: true,
@@ -188,11 +193,12 @@ export function RichTextEditor({
     content: parseMarkdownToHtml(content),
     onUpdate: ({ editor }) => {
       let raw = (editor.storage as any).markdown?.getMarkdown() || '';
-      // Ensure any <span data-wiki-link="Title"> is serialized cleanly as [[Title]]
+      // Ensure [[...]] is saved cleanly without escape slashes
+      raw = raw.replace(/\\\[\\\[/g, '[[').replace(/\\\]\\\]/g, ']]');
       raw = raw.replace(/<span\s+data-wiki-link="([^"]+)"[^>]*>[\s\S]*?<\/span>/gi, '[[$1]]');
       onChange(raw);
     },
-    onTransaction: ({ editor }) => {
+    onSelectionUpdate: ({ editor }) => {
       const textColor = editor.getAttributes('textStyle').color || null;
       const hlColor = editor.getAttributes('highlight').color || null;
       setActiveSelectionTextColor(textColor);
@@ -203,13 +209,25 @@ export function RichTextEditor({
         class:
           'prose prose-slate max-w-none focus:outline-hidden min-h-[300px] font-serif-cn leading-relaxed text-slate-800',
       },
-      handleClick: () => {
-        // In edit mode: clicking inside [[WikiLink]] simply places cursor and allows editing
-        // NEVER trigger navigation in edit mode! Only preview mode navigates.
-        return false;
-      },
     },
   });
+
+  // Re-trigger decoration update when knownNoteTitles content actually changes
+  const lastKnownTitlesHashRef = useRef<string>('');
+  useEffect(() => {
+    knownTitlesRef.current = knownNoteTitles;
+    const currentHash = knownNoteTitles.join('|||');
+    if (lastKnownTitlesHashRef.current !== currentHash) {
+      lastKnownTitlesHashRef.current = currentHash;
+      if (editor && !editor.isDestroyed && editor.view) {
+        try {
+          editor.view.dispatch(editor.state.tr);
+        } catch (_) {
+          // ignore if view not ready
+        }
+      }
+    }
+  }, [knownNoteTitles, editor]);
 
   // Sync external content changes
   useEffect(() => {
@@ -220,22 +238,73 @@ export function RichTextEditor({
     }
   }, [content, editor]);
 
-  // Insert or convert to WikiLink
+  // Insert or convert to WikiLink:
+  // - Inserts [[在这里输入链接名]]
+  // - Immediately selects "在这里输入链接名" so user can directly type to replace it with real note name
+  // - Fully editable normal text, not an atomic read-only pill
   const handleInsertWikiLink = useCallback(() => {
     if (!editor) return;
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to).trim();
-    const title = selectedText || '新双链笔记';
+    const { from, to, empty } = editor.state.selection;
+
+    if (!empty) {
+      const selectedText = editor.state.doc.textBetween(from, to).trim();
+      if (selectedText) {
+        const insertText = `[[${selectedText}]]`;
+        editor
+          .chain()
+          .focus()
+          .insertContentAt({ from, to }, insertText)
+          .setTextSelection({ from: from + 2, to: from + 2 + selectedText.length })
+          .run();
+        return;
+      }
+    }
+
+    const placeholder = '在这里输入链接名';
+    const insertText = `[[${placeholder}]]`;
 
     editor
       .chain()
       .focus()
-      .insertContent({
-        type: 'wikiLink',
-        attrs: { title },
-      })
+      .insertContentAt(from, insertText)
+      .setTextSelection({ from: from + 2, to: from + 2 + placeholder.length })
       .run();
   }, [editor]);
+
+  // Independent per-line list toggle:
+  // - Switches only the current line/item without modifying or polluting adjacent lines
+  // - Bullet and numbered lists can freely coexist
+  const handleToggleList = useCallback(
+    (targetType: 'bulletList' | 'orderedList') => {
+      if (!editor) return;
+
+      const isTargetActive = editor.isActive(targetType);
+      const otherType = targetType === 'bulletList' ? 'orderedList' : 'bulletList';
+      const isOtherActive = editor.isActive(otherType);
+
+      if (isTargetActive) {
+        // Toggle off the current list item back to a standard paragraph
+        editor.chain().focus().liftListItem('listItem').run();
+      } else if (isOtherActive) {
+        // Switch between list types: lift this item out and wrap specifically into the target type
+        // This keeps other lines intact!
+        editor
+          .chain()
+          .focus()
+          .liftListItem('listItem')
+          .wrapInList(targetType)
+          .run();
+      } else {
+        // Wrap current line into target list type
+        editor
+          .chain()
+          .focus()
+          .wrapInList(targetType)
+          .run();
+      }
+    },
+    [editor]
+  );
 
   // Fast apply text color (live selection or last used)
   const handleFastApplyTextColor = () => {
@@ -378,7 +447,7 @@ export function RichTextEditor({
           {/* Lists */}
           <button
             type="button"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            onClick={() => handleToggleList('bulletList')}
             className={`p-1.5 rounded-md transition cursor-pointer ${
               editor.isActive('bulletList') ? 'bg-slate-200 text-[#2C4056]' : 'text-slate-600 hover:bg-slate-200/70'
             }`}
@@ -388,7 +457,7 @@ export function RichTextEditor({
           </button>
           <button
             type="button"
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            onClick={() => handleToggleList('orderedList')}
             className={`p-1.5 rounded-md transition cursor-pointer ${
               editor.isActive('orderedList') ? 'bg-slate-200 text-[#2C4056]' : 'text-slate-600 hover:bg-slate-200/70'
             }`}

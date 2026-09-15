@@ -238,3 +238,22 @@ mark {
   -webkit-box-decoration-break: clone !important;
 }
 
+/* WikiLinks in TipTap rich text editor: editable text with dynamic status styling */
+.tiptap-wikilink-existing {
+  color: #2563eb !important;
+  background-color: rgba(239, 246, 255, 0.9) !important;
+  border: 1px solid rgba(191, 219, 254, 0.9) !important;
+  border-radius: 4px !important;
+  padding: 1px 4px !important;
+  font-weight: 600 !important;
+}
+
+.tiptap-wikilink-new {
+  color: #64748b !important;
+  background-color: rgba(241, 245, 249, 0.9) !important;
+  border: 1px dashed rgba(203, 213, 225, 0.9) !important;
+  border-radius: 4px !important;
+  padding: 1px 4px !important;
+  font-weight: 500 !important;
+}
+

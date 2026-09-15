@@ -60,11 +60,11 @@ export function MarkdownRenderer({
       const exists = knownNoteTitles.some((t) => norm(t) === norm(cleanTitle));
 
       const btnClass = exists
-        ? 'inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-md text-xs font-medium cursor-pointer transition active:scale-95 select-none bg-[#E2EBF2] text-[#2C4056] hover:bg-[#D3E1ED] border border-[#BACCDD] align-baseline shadow-2xs'
-        : 'inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-md text-xs font-medium cursor-pointer transition active:scale-95 select-none bg-amber-50 text-amber-900 hover:bg-amber-100 border border-dashed border-amber-300 align-baseline shadow-2xs';
+        ? 'inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded text-xs font-semibold cursor-pointer transition active:scale-95 select-none bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 align-baseline shadow-2xs'
+        : 'inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded text-xs font-normal cursor-pointer transition active:scale-95 select-none bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 border border-dashed border-slate-300 align-baseline shadow-2xs';
 
-      const icon = exists ? '🔗' : '✨';
-      const tooltip = exists ? `跳转到笔记《${cleanTitle}》` : `新建并打开笔记《${cleanTitle}》`;
+      const icon = '🔗';
+      const tooltip = exists ? `跳转到笔记《${cleanTitle}》` : `笔记《${cleanTitle}》尚不存在，点击立即创建`;
 
       return `<button type="button" data-wiki-link="${cleanTitle}" title="${tooltip}" class="${btnClass}">${icon} ${cleanTitle}</button>`;
     });

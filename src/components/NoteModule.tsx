@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Note, ReadingMaterial } from '../types';
 import { db } from '../db/database';
 import { syncNoteLinks, getBacklinksForNote } from '../utils/markdownHelper';
@@ -160,7 +160,7 @@ export const NoteModule: React.FC<NoteModuleProps> = ({
     }
   };
 
-  const knownNoteTitles = notes.map((n) => n.title);
+  const knownNoteTitles = useMemo(() => notes.map((n) => n.title), [notes]);
 
   if (!activeNote) {
     return (
@@ -291,6 +291,7 @@ export const NoteModule: React.FC<NoteModuleProps> = ({
               onChange={(mdContent) => handleUpdateActiveNote({ markdownContent: mdContent })}
               placeholder="开始使用富文本与 [[双向链接]] 记录笔记..."
               className="flex-1 w-full h-full bg-white"
+              knownNoteTitles={knownNoteTitles}
               onWikiLinkClick={handleWikiLinkClick}
             />
           </div>
