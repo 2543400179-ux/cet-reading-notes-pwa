@@ -15,8 +15,8 @@ interface ClozeQuestionSectionProps {
 }
 
 export const ClozeQuestionSection: React.FC<ClozeQuestionSectionProps> = ({
-  questions,
-  wordBank,
+  questions = [],
+  wordBank = [],
   isSubmitted,
   onAnswerSelected,
   onSubmit,
@@ -27,14 +27,17 @@ export const ClozeQuestionSection: React.FC<ClozeQuestionSectionProps> = ({
   const [openSelectorQId, setOpenSelectorQId] = useState<string | null>(null);
   const [showExplanations, setShowExplanations] = useState<Record<string, boolean>>({});
 
-  const answeredCount = questions.filter((q) => Boolean(q.userAnswer)).length;
-  const correctCount = questions.filter(
+  const safeQuestions = questions || [];
+  const safeWordBank = wordBank || [];
+
+  const answeredCount = safeQuestions.filter((q) => Boolean(q.userAnswer)).length;
+  const correctCount = safeQuestions.filter(
     (q) => q.userAnswer?.toUpperCase() === q.answer.toUpperCase()
   ).length;
 
   // Map of letter -> question using it
   const usedWordMap = new Map<string, Question>();
-  questions.forEach((q) => {
+  safeQuestions.forEach((q) => {
     if (q.userAnswer) {
       usedWordMap.set(q.userAnswer.toUpperCase(), q);
     }
@@ -136,18 +139,18 @@ export const ClozeQuestionSection: React.FC<ClozeQuestionSectionProps> = ({
       <div className="p-3.5 sm:p-4 bg-[#F0F4F8]/70 border-b border-slate-200/90">
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <span className="text-xs font-semibold text-[#2C4056] flex items-center gap-1.5">
-            <span>📚 备选词库 (A - O 共 {wordBank.length || 15} 词)</span>
+            <span>📚 备选词库 (A - O 共 {safeWordBank.length || 15} 词)</span>
             <span className="text-[11px] font-normal text-slate-500">
               (已被选走的词呈灰色锁定)
             </span>
           </span>
           <span className="text-[11px] text-slate-500">
-            剩余可用: {(wordBank.length || 15) - answeredCount} 词
+            剩余可用: {(safeWordBank.length || 15) - answeredCount} 词
           </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-          {wordBank.map((item) => {
+          {safeWordBank.map((item) => {
             const usingQuestion = usedWordMap.get(item.letter);
             const isUsed = Boolean(usingQuestion);
 
@@ -163,13 +166,13 @@ export const ClozeQuestionSection: React.FC<ClozeQuestionSectionProps> = ({
                   if (isSubmitted || isUsed) return;
                   // If a blank is focused or there's an active blank, assign to it
                   const targetQ = focusedBlankNumber
-                    ? questions.find((q) => Number(q.number) === focusedBlankNumber)
-                    : questions.find((q) => !q.userAnswer);
+                    ? safeQuestions.find((q) => Number(q.number) === focusedBlankNumber)
+                    : safeQuestions.find((q) => !q.userAnswer);
 
                   if (targetQ) {
                     handleSelectWord(targetQ.id, item.letter);
-                  } else if (questions[0]) {
-                    handleSelectWord(questions[0].id, item.letter);
+                  } else if (safeQuestions[0]) {
+                    handleSelectWord(safeQuestions[0].id, item.letter);
                   }
                 }}
               >
@@ -199,7 +202,7 @@ export const ClozeQuestionSection: React.FC<ClozeQuestionSectionProps> = ({
 
       {/* 10 Blanks list */}
       <div className="divide-y divide-slate-100">
-        {questions.map((q, idx) => {
+        {safeQuestions.map((q, idx) => {
           const blankNum = q.number ? Number(q.number) : 26 + idx;
           const isAnswered = Boolean(q.userAnswer);
           const isCorrect =
@@ -210,10 +213,10 @@ export const ClozeQuestionSection: React.FC<ClozeQuestionSectionProps> = ({
           const isFocused = focusedBlankNumber === blankNum;
 
           // Find current assigned word object
-          const currentWordItem = wordBank.find(
+          const currentWordItem = safeWordBank.find(
             (w) => w.letter.toUpperCase() === q.userAnswer?.toUpperCase()
           );
-          const correctWordItem = wordBank.find(
+          const correctWordItem = safeWordBank.find(
             (w) => w.letter.toUpperCase() === q.answer.toUpperCase()
           );
 
@@ -322,7 +325,7 @@ export const ClozeQuestionSection: React.FC<ClozeQuestionSectionProps> = ({
                     </div>
 
                     <div className="grid grid-cols-3 gap-1.5 max-h-56 overflow-y-auto p-0.5">
-                      {wordBank.map((item) => {
+                      {safeWordBank.map((item) => {
                         const usingQ = usedWordMap.get(item.letter);
                         const isUsedByOther = usingQ && usingQ.id !== q.id;
                         const isCurrentlyChosen = q.userAnswer === item.letter;

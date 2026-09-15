@@ -9,6 +9,7 @@ import { AiAnalysisModal } from './components/AiAnalysisModal';
 import { ImportMaterialModal } from './components/ImportMaterialModal';
 import { SettingsModal } from './components/SettingsModal';
 import { syncNoteLinks } from './utils/markdownHelper';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'reading' | 'notes'>('reading');
@@ -206,23 +207,25 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-hidden flex flex-col min-w-0">
-          {activeTab === 'reading' ? (
-            <ReadingView
-              viewMode={viewMode}
-              onAiAnalyze={handleOpenAiAnalysis}
-              onCreateNoteWithAnchor={handleCreateNoteWithAnchor}
-              targetAnchorPos={targetAnchorPos}
-              targetMaterialIdProp={targetMaterialId}
-              onOpenDirectory={() => setIsSidebarOpen(true)}
-              onSelectMaterialId={(id) => setTargetMaterialId(id)}
-            />
-          ) : (
-            <NoteModule
-              onJumpToMaterial={handleJumpToMaterial}
-              activeNoteIdProp={activeNoteIdForNotes}
-              onOpenDirectory={() => setIsSidebarOpen(true)}
-            />
-          )}
+          <ErrorBoundary fallbackTitle="内容视图加载异常">
+            {activeTab === 'reading' ? (
+              <ReadingView
+                viewMode={viewMode}
+                onAiAnalyze={handleOpenAiAnalysis}
+                onCreateNoteWithAnchor={handleCreateNoteWithAnchor}
+                targetAnchorPos={targetAnchorPos}
+                targetMaterialIdProp={targetMaterialId}
+                onOpenDirectory={() => setIsSidebarOpen(true)}
+                onSelectMaterialId={(id) => setTargetMaterialId(id)}
+              />
+            ) : (
+              <NoteModule
+                onJumpToMaterial={handleJumpToMaterial}
+                activeNoteIdProp={activeNoteIdForNotes}
+                onOpenDirectory={() => setIsSidebarOpen(true)}
+              />
+            )}
+          </ErrorBoundary>
         </main>
       </div>
 
