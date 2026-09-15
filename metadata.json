@@ -1,0 +1,6 @@
+{
+  "name": "Tidal Reading · 四六级英语阅读与双链笔记",
+  "description": "基于 Tidal_Echo 风格与 Material 3 的离线英语四六级阅读学习与双链笔记 PWA 工具，支持三视图切换、划词AI解析与 IndexedDB 本地存储。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

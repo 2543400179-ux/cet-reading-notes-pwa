@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2C4056"/>
+      <stop offset="50%" stop-color="#3D536B"/>
+      <stop offset="100%" stop-color="#1E2A38"/>
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#A4C2DC" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#7EA1C0" stop-opacity="0.85"/>
+    </linearGradient>
+    <filter id="subtleShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#15202B" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background with subtle squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- Wave Echo Lines (Tidal Echo motif) -->
+  <path d="M 64 360 C 140 310, 200 400, 290 350 C 370 300, 420 370, 448 350" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 64 390 C 150 340, 220 420, 310 370 C 380 330, 410 390, 448 380" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Center Open Book with Gentle Pearl Glow -->
+  <g filter="url(#subtleShadow)">
+    <!-- Book Spine & Pages -->
+    <path d="M 120 180 C 180 155, 240 165, 256 185 C 272 165, 332 155, 392 180 L 392 310 C 332 285, 272 295, 256 315 C 240 295, 180 285, 120 310 Z" fill="#F8FAFC"/>
+    <!-- Center Spine Line -->
+    <line x1="256" y1="185" x2="256" y2="315" stroke="#7E93A4" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Left Page Text Lines -->
+    <line x1="150" y1="215" x2="226" y2="204" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+    <line x1="150" y1="240" x2="226" y2="229" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+    <line x1="150" y1="265" x2="206" y2="254" stroke="#4C6378" stroke-width="3.5" stroke-linecap="round"/>
+    
+    <!-- Right Page Text Lines -->
+    <line x1="286" y1="204" x2="362" y2="215" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+    <line x1="286" y1="229" x2="362" y2="240" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+    <line x1="286" y1="254" x2="332" y2="260" stroke="#4C6378" stroke-width="3.5" stroke-linecap="round"/>
+    
+    <!-- Rising Sparkle / Tidal Star -->
+    <circle cx="256" cy="135" r="8" fill="#FCE790"/>
+    <path d="M 256 115 L 256 155 M 236 135 L 276 135" stroke="#FDE68A" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>

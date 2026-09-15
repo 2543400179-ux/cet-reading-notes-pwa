@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  --font-en: "Cormorant Garamond", Georgia, serif;
+  --font-cn: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  
+  /* Pearl Tide (Default) */
+  --bg-canvas: #F7FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #F0F4F8;
+  --bg-frosted: rgba(247, 250, 252, 0.85);
+  --color-text: #253447;
+  --color-text-soft: #5E7080;
+  --color-text-faint: #8A99A8;
+  --border-hairline: rgba(120, 142, 165, 0.22);
+  --border-subtle: rgba(120, 142, 165, 0.35);
+  --color-accent: #4C6378;
+  --color-accent-dark: #2C4056;
+  --color-accent-light: #E2EBF2;
+  --shadow-soft: 0 10px 30px rgba(74, 93, 108, 0.08);
+  --shadow-elevated: 0 16px 40px rgba(74, 93, 108, 0.14);
+}
+
+[data-theme="harbor"] {
+  /* Harbor Theme */
+  --bg-canvas: #F4F2EF;
+  --bg-surface: #FCFAF8;
+  --bg-surface-elevated: #EFEBE8;
+  --bg-frosted: rgba(244, 242, 239, 0.88);
+  --color-text: #36404B;
+  --color-text-soft: #5E6B78;
+  --color-text-faint: #9197A0;
+  --border-hairline: rgba(74, 93, 108, 0.20);
+  --border-subtle: rgba(74, 93, 108, 0.32);
+  --color-accent: #4A5D6C;
+  --color-accent-dark: #323F4B;
+  --color-accent-light: #E7E3DF;
+  --shadow-soft: 0 10px 30px rgba(54, 64, 75, 0.08);
+  --shadow-elevated: 0 16px 40px rgba(54, 64, 75, 0.14);
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--color-text);
+  font-family: var(--font-cn);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-serif-en {
+  font-family: var(--font-en);
+}
+
+.font-serif-cn {
+  font-family: var(--font-cn);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 142, 165, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 142, 165, 0.5);
+}
+
+/* Touch action optimizations for smooth mobile bottom sheet dragging */
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
