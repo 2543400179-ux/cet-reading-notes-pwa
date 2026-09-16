@@ -172,6 +172,9 @@ export function RichTextEditor({
     knownTitlesRef.current = knownNoteTitles;
   }, [knownNoteTitles]);
 
+  const lastEmittedContentRef = useRef<string>(content);
+  const isLocalChangeRef = useRef<boolean>(false);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -196,6 +199,8 @@ export function RichTextEditor({
       // Ensure [[...]] is saved cleanly without escape slashes
       raw = raw.replace(/\\\[\\\[/g, '[[').replace(/\\\]\\\]/g, ']]');
       raw = raw.replace(/<span\s+data-wiki-link="([^"]+)"[^>]*>[\s\S]*?<\/span>/gi, '[[$1]]');
+      lastEmittedContentRef.current = raw;
+      isLocalChangeRef.current = true;
       onChange(raw);
     },
     onSelectionUpdate: ({ editor }) => {
@@ -229,9 +234,17 @@ export function RichTextEditor({
     }
   }, [knownNoteTitles, editor]);
 
-  // Sync external content changes
+  // Sync external content changes (e.g. switching active note or external updates)
   useEffect(() => {
     if (!editor) return;
+    if (isLocalChangeRef.current) {
+      isLocalChangeRef.current = false;
+      return;
+    }
+    if (content === lastEmittedContentRef.current) {
+      return;
+    }
+    lastEmittedContentRef.current = content;
     const currentMd = (editor.storage as any).markdown?.getMarkdown() || '';
     if (content !== currentMd) {
       editor.commands.setContent(parseMarkdownToHtml(content));
@@ -239,9 +252,9 @@ export function RichTextEditor({
   }, [content, editor]);
 
   // Insert or convert to WikiLink:
-  // - Inserts [[在这里输入链接名]]
-  // - Immediately selects "在这里输入链接名" so user can directly type to replace it with real note name
-  // - Fully editable normal text, not an atomic read-only pill
+  // - If text is selected: wraps it as [[selectedText]]
+  // - If no text selected: inserts [[]] and places cursor right in the middle between [[ and ]]
+  // - Fully editable normal text without dummy placeholder strings that require cumbersome backspacing on mobile keyboards
   const handleInsertWikiLink = useCallback(() => {
     if (!editor) return;
     const { from, to, empty } = editor.state.selection;
@@ -260,14 +273,12 @@ export function RichTextEditor({
       }
     }
 
-    const placeholder = '在这里输入链接名';
-    const insertText = `[[${placeholder}]]`;
-
+    // When empty selection: directly insert [[]] and position caret inside
     editor
       .chain()
       .focus()
-      .insertContentAt(from, insertText)
-      .setTextSelection({ from: from + 2, to: from + 2 + placeholder.length })
+      .insertContentAt(from, '[[]]')
+      .setTextSelection(from + 2)
       .run();
   }, [editor]);
 

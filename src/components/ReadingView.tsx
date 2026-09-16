@@ -656,59 +656,66 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       highlights
     );
 
+    // Group segments into paragraphs split by '\n\n' or '\n' so that inline highlights across words flow seamlessly
     return (
       <div
         ref={passageRef}
         onMouseUp={handleTextSelection}
         onTouchEnd={handleTextSelection}
-        className="font-serif-en text-[16px] sm:text-[17px] leading-[1.8] text-[#253447] w-full select-text selection:bg-[#4C6378]/25 space-y-3"
+        className="font-serif-en text-[16px] sm:text-[17px] leading-[1.8] text-[#253447] w-full select-text selection:bg-[#4C6378]/25 space-y-4"
       >
-        {segments.map((seg, idx) => {
-          let content: React.ReactNode = null;
-          
-          const parts = seg.text.split('\n\n');
-          if (parts.length > 1) {
-            content = parts.map((part, pIdx) => (
-              <React.Fragment key={`${idx}-${pIdx}`}>
-                <span>{renderTextWithCloze(part)}</span>
-                {pIdx < parts.length - 1 && <br className="my-2" />}
-              </React.Fragment>
-            ));
-          } else {
-            content = renderTextWithCloze(seg.text);
-          }
+        {(() => {
+          // Pre-split text across paragraphs while preserving highlight offsets
+          const paragraphs: React.ReactNode[][] = [[]];
 
-          if (seg.highlights && seg.highlights.length > 0) {
-            // Determine active background and text colors
+          segments.forEach((seg, sIdx) => {
             let bg: string | undefined = undefined;
             let tc: string | undefined = undefined;
-            for (const hl of seg.highlights) {
-              if (hl.bgColor && hl.bgColor !== 'transparent') bg = hl.bgColor;
-              if (hl.textColor && hl.textColor !== 'inherit') tc = hl.textColor;
+            if (seg.highlights && seg.highlights.length > 0) {
+              for (const hl of seg.highlights) {
+                if (hl.bgColor && hl.bgColor !== 'transparent') bg = hl.bgColor;
+                if (hl.textColor && hl.textColor !== 'inherit') tc = hl.textColor;
+              }
             }
 
-            content = (
-              <mark
-                key={`hl-${seg.startPos}-${seg.endPos}`}
-                style={{
-                  backgroundColor: bg,
-                  color: tc,
-                }}
-                className="inline font-medium select-text"
-              >
-                {content}
-              </mark>
-            );
+            const rawParts = seg.text.split('\n\n');
+            rawParts.forEach((part, pIdx) => {
+              if (pIdx > 0) {
+                paragraphs.push([]);
+              }
 
-            return (
-              <span key={idx} id={`anchor-pos-${seg.startPos}`}>
-                {content}
-              </span>
-            );
-          }
+              if (!part) return;
 
-          return <span key={idx} id={`anchor-pos-${seg.startPos}`}>{content}</span>;
-        })}
+              let inner: React.ReactNode = renderTextWithCloze(part);
+              if (bg || tc) {
+                inner = (
+                  <mark
+                    key={`hl-${seg.startPos}-${pIdx}`}
+                    style={{
+                      backgroundColor: bg,
+                      color: tc,
+                    }}
+                    className="reading-highlight inline font-medium select-text"
+                  >
+                    {inner}
+                  </mark>
+                );
+              }
+
+              paragraphs[paragraphs.length - 1].push(
+                <React.Fragment key={`${sIdx}-${pIdx}`}>
+                  {inner}
+                </React.Fragment>
+              );
+            });
+          });
+
+          return paragraphs.map((para, pIdx) => (
+            <p key={`p-${pIdx}`} className="leading-[1.85] m-0">
+              {para}
+            </p>
+          ));
+        })()}
       </div>
     );
   };

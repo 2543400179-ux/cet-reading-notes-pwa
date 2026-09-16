@@ -287,6 +287,7 @@ export const NoteModule: React.FC<NoteModuleProps> = ({
         {viewMode === 'edit' ? (
           <div className="flex-1 flex flex-col w-full h-full min-h-0">
             <RichTextEditor
+              key={activeNote.id}
               content={activeNote.markdownContent}
               onChange={(mdContent) => handleUpdateActiveNote({ markdownContent: mdContent })}
               placeholder="开始使用富文本与 [[双向链接]] 记录笔记..."
